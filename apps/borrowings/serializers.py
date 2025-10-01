@@ -1,8 +1,13 @@
+from datetime import datetime
+
+from django.utils import timezone
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 
 from apps.books.serializers import BookSerializer
 from apps.users.serializers import UserSerializer
 from .models import Borrowing
+from ..books.models import Book
 
 
 class BorrowingListSerializer(serializers.ModelSerializer):
@@ -35,3 +40,21 @@ class BorrowingDetailSerializer(serializers.ModelSerializer):
             "book",
             "user",
         )
+
+
+class BorrowingCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Borrowing
+        fields = ("book", "expected_return_date")
+
+    def validate_book(self, value: Book) -> Book:
+        if value.inventory == 0:
+            raise ValidationError("This book is out of stock.")
+        return value
+
+    def validate_expected_return_date(self, value: datetime) -> datetime:
+        if value <= timezone.now().date():
+            raise ValidationError(
+                "Expected return date must be in the future."
+            )
+        return value
