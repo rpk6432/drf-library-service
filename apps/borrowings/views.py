@@ -11,6 +11,7 @@ from apps.borrowings.serializers import (
     BorrowingListSerializer,
     BorrowingDetailSerializer,
     BorrowingCreateSerializer,
+    BorrowingListAdminSerializer,
 )
 
 
@@ -26,6 +27,25 @@ class BorrowingViewSet(
 
     def get_queryset(self) -> QuerySet:
         queryset = self.queryset
+        user = self.request.user
+
+        if not user.is_staff:
+            queryset = queryset.filter(user=user)
+
+        if user.is_staff and (
+            user_id := self.request.query_params.get("user_id")
+        ):
+            queryset = queryset.filter(user_id=user_id)
+
+        is_active_param = self.request.query_params.get("is_active")
+
+        if is_active_param is not None:
+            is_active = is_active_param.lower() in ("true", "1", "yes")
+
+            if is_active:
+                queryset = queryset.filter(actual_return_date__isnull=True)
+            else:
+                queryset = queryset.filter(actual_return_date__isnull=False)
 
         if self.action == "list":
             return queryset.select_related("book")
@@ -35,10 +55,17 @@ class BorrowingViewSet(
         return queryset
 
     def get_serializer_class(self) -> Type[Serializer]:
-        if self.action == "create":
-            return BorrowingCreateSerializer
+        user = self.request.user
+
+        if self.action == "list" and user.is_staff:
+            return BorrowingListAdminSerializer
+
         if self.action == "retrieve":
             return BorrowingDetailSerializer
+
+        if self.action == "create":
+            return BorrowingCreateSerializer
+
         return self.serializer_class
 
     @transaction.atomic
