@@ -2,8 +2,13 @@ from typing import Type
 
 from django.db import transaction
 from django.db.models import QuerySet
-from rest_framework import viewsets, mixins
+from django.utils import timezone
+from rest_framework import viewsets, mixins, status
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.serializers import Serializer
 
 from apps.borrowings.models import Borrowing
@@ -24,6 +29,34 @@ class BorrowingViewSet(
     serializer_class = BorrowingListSerializer
     permission_classes = (IsAuthenticated,)
     queryset = Borrowing.objects.all()
+
+    @action(
+        methods=["POST"],
+        detail=True,
+        url_path="return",
+        permission_classes=[IsAuthenticated],
+    )
+    @transaction.atomic
+    def return_borrowing(
+        self, request: Request, pk: int | None = None
+    ) -> Response:
+        borrowing = self.get_object()
+        book = borrowing.book
+
+        if borrowing.actual_return_date:
+            raise ValidationError("This borrowing has already been returned.")
+
+        if not request.user.is_staff and borrowing.user != request.user:
+            raise PermissionDenied("You cannot return this borrowing.")
+
+        borrowing.actual_return_date = timezone.now().date()
+        borrowing.save()
+
+        book.inventory += 1
+        book.save()
+
+        serializer = self.get_serializer(borrowing)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def get_queryset(self) -> QuerySet:
         queryset = self.queryset
