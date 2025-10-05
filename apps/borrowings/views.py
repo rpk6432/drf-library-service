@@ -18,6 +18,8 @@ from apps.borrowings.serializers import (
     BorrowingCreateSerializer,
     BorrowingListAdminSerializer,
 )
+from apps.payments.models import Payment
+from apps.payments.services import prepare_stripe_session
 
 
 class BorrowingViewSet(
@@ -101,13 +103,30 @@ class BorrowingViewSet(
 
         return self.serializer_class
 
-    @transaction.atomic
-    def perform_create(self, serializer: Serializer) -> None:
-        """
-        Attach the current user to the borrowing and decrease book inventory.
-        """
-        book = serializer.validated_data["book"]
-        book.inventory -= 1
-        book.save()
+    def perform_create(self, serializer: BorrowingCreateSerializer) -> None:
+        validated_data = serializer.validated_data
+        book = validated_data["book"]
+        expected_return_date = validated_data["expected_return_date"]
+        borrow_date = timezone.now().date()
 
-        serializer.save(user=self.request.user)
+        try:
+            stripe_session, money_to_pay = prepare_stripe_session(
+                book, self.request, expected_return_date, borrow_date
+            )
+        except Exception as e:
+            raise ValidationError(f"Error preparing Stripe session: {e}")
+
+        with transaction.atomic():
+            book.inventory -= 1
+            book.save()
+
+            borrowing = serializer.save(user=self.request.user)
+
+            Payment.objects.create(
+                status="PENDING",
+                type="PAYMENT",
+                borrowing=borrowing,
+                session_url=stripe_session.url,
+                session_id=stripe_session.id,
+                money_to_pay=money_to_pay,
+            )

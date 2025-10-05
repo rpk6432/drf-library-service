@@ -1,5 +1,7 @@
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from .models import Payment
 from .serializers import (
@@ -26,3 +28,21 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action == "retrieve":
             return PaymentDetailSerializer
         return self.serializer_class
+
+    @action(
+        methods=["GET"],
+        detail=False,
+        url_path="success",
+    )
+    def success(self, request):
+        """Endpoint for successful Stripe payments."""
+        return Response({"message": "Payment successful!"})
+
+    @action(
+        methods=["GET"],
+        detail=False,
+        url_path="cancel",
+    )
+    def cancel(self, request):
+        """Endpoint for cancelled Stripe payments."""
+        return Response({"message": "Payment can be made later."})
