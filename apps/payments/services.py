@@ -3,7 +3,9 @@ from decimal import Decimal
 
 import stripe
 from django.urls import reverse
+from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
+from stripe.checkout import Session
 
 from apps.books.models import Book
 
@@ -43,3 +45,19 @@ def prepare_stripe_session(
     )
 
     return session, money_to_pay
+
+
+def get_session(session_id: str) -> Session:
+    """Retrieve a Stripe Checkout session."""
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+        return session
+    except stripe.error.InvalidRequestError as e:
+        raise ValidationError(f"Invalid Stripe session ID: {e}")
+    except Exception as e:
+        raise ValidationError(f"Stripe error: {e}")
+
+
+def is_session_paid(session: Session) -> bool:
+    """Return True if the session is fully paid."""
+    return session.payment_status == "paid"
