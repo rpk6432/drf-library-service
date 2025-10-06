@@ -19,7 +19,7 @@ from apps.borrowings.serializers import (
     BorrowingListAdminSerializer,
 )
 from apps.payments.models import Payment
-from apps.payments.services import prepare_stripe_session
+from apps.payments.services import create_payment_session, create_fine_session
 
 
 class BorrowingViewSet(
@@ -56,6 +56,25 @@ class BorrowingViewSet(
 
         book.inventory += 1
         book.save()
+
+        if borrowing.actual_return_date > borrowing.expected_return_date:
+            try:
+                stripe_session, fine_amount = create_fine_session(
+                    borrowing, request
+                )
+            except Exception as e:
+                raise ValidationError(
+                    f"Error preparing fine payment session: {e}"
+                )
+
+            Payment.objects.create(
+                status="PENDING",
+                type=Payment.TypeChoices.FINE,
+                borrowing=borrowing,
+                session_url=stripe_session.url,
+                session_id=stripe_session.id,
+                money_to_pay=fine_amount,
+            )
 
         serializer = self.get_serializer(borrowing)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -117,7 +136,7 @@ class BorrowingViewSet(
         borrow_date = timezone.now().date()
 
         try:
-            stripe_session, money_to_pay = prepare_stripe_session(
+            stripe_session, money_to_pay = create_payment_session(
                 book, self.request, expected_return_date, borrow_date
             )
         except Exception as e:

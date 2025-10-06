@@ -158,3 +158,4 @@ SIMPLE_JWT = {
 }
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+FINE_MULTIPLIER = 2
