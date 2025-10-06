@@ -18,6 +18,8 @@ from apps.borrowings.serializers import (
     BorrowingCreateSerializer,
     BorrowingListAdminSerializer,
 )
+from apps.payments.models import Payment
+from apps.payments.services import create_payment_session, create_fine_session
 
 
 class BorrowingViewSet(
@@ -55,6 +57,25 @@ class BorrowingViewSet(
         book.inventory += 1
         book.save()
 
+        if borrowing.actual_return_date > borrowing.expected_return_date:
+            try:
+                stripe_session, fine_amount = create_fine_session(
+                    borrowing, request
+                )
+            except Exception as e:
+                raise ValidationError(
+                    f"Error preparing fine payment session: {e}"
+                )
+
+            Payment.objects.create(
+                status="PENDING",
+                type=Payment.TypeChoices.FINE,
+                borrowing=borrowing,
+                session_url=stripe_session.url,
+                session_id=stripe_session.id,
+                money_to_pay=fine_amount,
+            )
+
         serializer = self.get_serializer(borrowing)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -62,6 +83,9 @@ class BorrowingViewSet(
         queryset = self.queryset
         user = self.request.user
 
+        # If the user is not a staff member, limit queryset to their own borrowings.
+        # If the user is staff and provides a "user_id" query parameter,
+        # filter the queryset to show only borrowings of that specific user.
         if not user.is_staff:
             queryset = queryset.filter(user=user)
 
@@ -70,6 +94,8 @@ class BorrowingViewSet(
         ):
             queryset = queryset.filter(user_id=user_id)
 
+        # Filter borrowings by "is_active" param:
+        # active (not returned) or completed (returned).
         is_active_param = self.request.query_params.get("is_active")
 
         if is_active_param is not None:
@@ -83,7 +109,9 @@ class BorrowingViewSet(
         if self.action == "list":
             return queryset.select_related("book")
         if self.action == "retrieve":
-            return queryset.select_related("book", "user")
+            return queryset.select_related("book", "user").prefetch_related(
+                "payments"
+            )
 
         return queryset
 
@@ -101,13 +129,45 @@ class BorrowingViewSet(
 
         return self.serializer_class
 
-    @transaction.atomic
-    def perform_create(self, serializer: Serializer) -> None:
-        """
-        Attach the current user to the borrowing and decrease book inventory.
-        """
-        book = serializer.validated_data["book"]
-        book.inventory -= 1
-        book.save()
+    def perform_create(self, serializer: BorrowingCreateSerializer) -> None:
+        validated_data = serializer.validated_data
+        book = validated_data["book"]
+        expected_return_date = validated_data["expected_return_date"]
+        borrow_date = timezone.now().date()
 
-        serializer.save(user=self.request.user)
+        try:
+            stripe_session, money_to_pay = create_payment_session(
+                book, self.request, expected_return_date, borrow_date
+            )
+        except Exception as e:
+            raise ValidationError(f"Error preparing Stripe session: {e}")
+
+        with transaction.atomic():
+            book.inventory -= 1
+            book.save()
+
+            borrowing = serializer.save(user=self.request.user)
+
+            Payment.objects.create(
+                status="PENDING",
+                type="PAYMENT",
+                borrowing=borrowing,
+                session_url=stripe_session.url,
+                session_id=stripe_session.id,
+                money_to_pay=money_to_pay,
+            )
+
+    def create(self, request: Request, *args, **kwargs) -> Response:
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+
+        # Use detail serializer to return full borrowing info in the response.
+        detail_serializer = BorrowingDetailSerializer(serializer.instance)
+
+        headers = self.get_success_headers(detail_serializer.data)
+        return Response(
+            detail_serializer.data,
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )

@@ -7,6 +7,7 @@ from rest_framework.exceptions import ValidationError
 from apps.books.serializers import BookSerializer
 from .models import Borrowing
 from ..books.models import Book
+from ..payments.serializers import PaymentListSerializer
 
 
 class BorrowingListSerializer(serializers.ModelSerializer):
@@ -36,6 +37,7 @@ class BorrowingDetailSerializer(serializers.ModelSerializer):
     book = BookSerializer(read_only=True)
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     user_email = serializers.CharField(source="user.email", read_only=True)
+    payments = PaymentListSerializer(many=True, read_only=True)
 
     class Meta:
         model = Borrowing
@@ -47,6 +49,7 @@ class BorrowingDetailSerializer(serializers.ModelSerializer):
             "expected_return_date",
             "actual_return_date",
             "book",
+            "payments",
         )
 
 
