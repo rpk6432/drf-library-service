@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "apps.borrowings",
     "apps.payments",
     "django_q",
+    "drf_spectacular",
 ]
 
 MIDDLEWARE = [
@@ -142,6 +143,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "users.User"
 
 REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "apps.users.authentication.CustomJWTAuthentication",
     ),
@@ -169,6 +171,13 @@ Q_CLUSTER = {
         "port": 6379,
         "db": 0,
     },
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "DRF Library Service",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
 }
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
