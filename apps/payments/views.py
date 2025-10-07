@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import Serializer
 
 from .models import Payment
+from .schemas import payment_schema
 from .serializers import (
     PaymentListSerializer,
     PaymentDetailSerializer,
@@ -15,6 +16,7 @@ from .serializers import (
 from .services import get_session, is_session_paid
 
 
+@payment_schema
 class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Payment.objects.all()
     serializer_class = PaymentListSerializer
