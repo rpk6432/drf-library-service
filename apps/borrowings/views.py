@@ -20,6 +20,7 @@ from apps.borrowings.serializers import (
 )
 from apps.payments.models import Payment
 from apps.payments.services import create_payment_session, create_fine_session
+from library_service.telegram.services import send_telegram_message
 
 
 class BorrowingViewSet(
@@ -155,6 +156,15 @@ class BorrowingViewSet(
                 session_url=stripe_session.url,
                 session_id=stripe_session.id,
                 money_to_pay=money_to_pay,
+            )
+
+            transaction.on_commit(
+                lambda: send_telegram_message(
+                    f"New borrowing created\n\n"
+                    f"Book: *{borrowing.book.title}*\n"
+                    f"User: `{borrowing.user.email}`\n"
+                    f"Expected return date: {borrowing.expected_return_date}"
+                )
             )
 
     def create(self, request: Request, *args, **kwargs) -> Response:

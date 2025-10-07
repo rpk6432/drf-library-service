@@ -157,5 +157,5 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": False,
 }
 
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 FINE_MULTIPLIER = 2
