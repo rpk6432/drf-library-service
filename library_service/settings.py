@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "apps.books",
     "apps.borrowings",
     "apps.payments",
+    "django_q",
 ]
 
 MIDDLEWARE = [
@@ -155,6 +156,19 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": False,
+}
+
+Q_CLUSTER = {
+    "name": "library_service_cluster",
+    "workers": 2,
+    "timeout": 90,
+    "retry": 120,
+    "queue_limit": 50,
+    "redis": {
+        "host": "redis",
+        "port": 6379,
+        "db": 0,
+    },
 }
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
