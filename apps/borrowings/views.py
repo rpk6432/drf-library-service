@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import Serializer
 
 from apps.borrowings.models import Borrowing
+from apps.borrowings.schemas import borrowing_schema
 from apps.borrowings.serializers import (
     BorrowingListSerializer,
     BorrowingDetailSerializer,
@@ -23,6 +24,7 @@ from apps.payments.services import create_payment_session, create_fine_session
 from library_service.telegram.services import send_telegram_message
 
 
+@borrowing_schema
 class BorrowingViewSet(
     mixins.CreateModelMixin,
     mixins.ListModelMixin,
